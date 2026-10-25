@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useLoggedInUserStore } from '../store/loggedInUser'
-
+//used calude as an assistant to help format the code and fix certain paths needed
 // make all paths and names lowercase for consistency
 const routes = [
   {
@@ -16,7 +16,7 @@ const routes = [
     path: '/clientform',
     name: 'clientform',
     // only authenticated users can create clients
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: true, requiresEditor: true },
     component: () => import('../views/clientform.vue')
   },
   {
@@ -34,7 +34,7 @@ const routes = [
   {
     path: '/eventform',
     name: 'eventform',
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: true, requiresEditor: true },
     component: () => import('../views/eventform.vue')
   },
   {
@@ -47,12 +47,12 @@ const routes = [
     path: '/eventdetails/:id',
     name: 'eventdetails',
     meta: { requiresAuth: true },
-    component: () => import('../views/eventdetails.vue')
+    component: () => import('../views/eventDetails.vue')
   },
   {
     path: '/serviceform',
     name: 'serviceform',
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: true, requiresEditor: true },
     component: () => import('../views/serviceform.vue')
   },
   {
@@ -73,7 +73,7 @@ const router = createRouter({
   routes
 })
 
-// protecting the routes
+// protecting the routes (single global guard: auth first, then editor role)
 router.beforeEach((to) => {
   const store = useLoggedInUserStore()
   if (to.meta.requiresAuth && !store.isLoggedIn) {
@@ -82,6 +82,10 @@ router.beforeEach((to) => {
       // save the location we were at to come back later
       query: { redirect: to.fullPath },
     }
+  }
+  // F4 changes, user type url -> back to dashboard
+  if (to.meta.requiresEditor && store.role !== 'editor') {
+    return { path: '/' }
   }
 })
 

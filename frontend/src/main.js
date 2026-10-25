@@ -7,6 +7,8 @@ import Toast from "vue-toastification";
 import "vue-toastification/dist/index.css";
 //state management library
 import { createPinia } from 'pinia'
+import { useLoggedInUserStore } from './store/loggedInUser'
+import { setUnauthorizedHandler } from './api/api'
 
 const app = createApp(App);
 
@@ -19,8 +21,16 @@ pinia.use(({ store }) => {
 
 //add pinia object to our instance
 app.use(pinia)
-app.use(router);
+// used claude to help us format the code for F4 (to restore the session on page refresh)//
+const userStore = useLoggedInUserStore(pinia)
+userStore.restoreSession()
+app.use(router); //claude helped moved the router for formatting and running purposed
 
+// F2: when the axios interceptor sees a 401, clear Pinia state and go to /login
+setUnauthorizedHandler(() => {
+  userStore.clearSession()
+  router.push('/login')
+})
 const options = {
   position: 'bottom-right'
 };
