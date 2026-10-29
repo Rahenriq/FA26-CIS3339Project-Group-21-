@@ -68,108 +68,86 @@
       </div>
       <!--Table showing list of Clients-->
       <div class="flex flex-col col-span-2">
-        <table class="min-w-full shadow-md rounded">
-          <thead class="bg-gray-50 text-xl">
-            <tr>
-              <th class="p-4 text-left">Name</th>
-              <th class="p-4 text-left">Phone number</th>
-              <th class="p-4 text-left">City</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-300">
-            <tr @click="$router.push({ name: 'clientdetails', params: { id: client._id } })" v-for="client in clients"
-              :key="client._id" class="cursor-pointer" :class="{ 'hoverRow': hoverId === client._id }"
-              @mouseenter="hoverId = client._id" @mouseleave="hoverId = null">
-              <td class="p-2 text-left">
-                {{ client.firstName + ' ' + client.lastName }}
-              </td>
-              <td class="p-2 text-left">
-                {{ client.phoneNumber.primary }}
-              </td>
-              <td class="p-2 text-left">{{ client.address.city }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <!-- Loading state -->
+        <p v-if="loading" class="p-8 text-2xl text-center text-gray-500 animate-pulse">Loading...</p>
+        <!-- Error state with retry -->
+        <div v-else-if="error" class="p-4 bg-red-50 text-red-900" role="alert">
+          <p class="font-bold">{{ error }}</p>
+          <button class="mt-2 bg-red-700 text-white rounded" type="button" @click="execute">Retry</button>
+        </div>
+        <!-- Table (shows its own "No results" row when empty) -->
+        <DataTable v-else :columns="columns" :rows="clients || []" @row-click="openClient" />
       </div>
     </div>
   </main>
 </template>
 
-<script>
+<script setup>
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { getClients, searchClients } from '../api/api'
-import { useToast } from 'vue-toastification'
+import { useApi } from '../composables/useApi'
+import DataTable from '../components/DataTable.vue'
 
-//Notifications
-const toast = useToast()
+const router = useRouter()
 
-export default {
-  data() {
-    return {
-      //variable to store all clients and their information for the organization
-      clients: null,
-      // Parameters for search to occur
-      searchBy: '',
-      firstName: '',
-      lastName: '',
-      phoneNumber: '',
-      // variable stores the ID of the row that the mouse is currently hovering over (to highlight the row red)
-      hoverId: null,
+// MIGRATION NOTE: data() -> ref()
+// Parameters for search to occur
+const searchBy = ref('')
+const firstName = ref('')
+const lastName = ref('')
+const phoneNumber = ref('')
+// the search currently applied (null = show every client)
+const activeQuery = ref(null)
+
+// MIGRATION NOTE: the hand-written loading/error/try-catch is replaced by the useApi composable.
+// (hoverId moved into DataTable)
+const { data: clients, loading, error, execute } = useApi(() =>
+  activeQuery.value ? searchClients(activeQuery.value) : getClients()
+)
+
+// columns shown by DataTable (the shared DataTable uses `field` to pick the value and to sort)
+const columns = [
+  {
+    label: 'Name',
+    field: 'lastName', // sorts by last name; render() controls what is displayed
+    render: (c) => `${c.firstName} ${c.lastName}`
+  },
+  { label: 'Phone number', field: 'phoneNumber.primary' },
+  { label: 'City', field: 'address.city' }
+]
+
+// MIGRATION NOTE: mounted() -> onMounted()
+onMounted(execute)
+
+// MIGRATION NOTE: methods.loadData -> plain function. Resets search fields and reloads all clients
+function loadData() {
+  searchBy.value = ''
+  firstName.value = ''
+  lastName.value = ''
+  phoneNumber.value = ''
+  activeQuery.value = null
+  execute()
+}
+
+// function called when user searches for clients
+function handleSubmitForm() {
+  // if user searched by client name
+  if (searchBy.value === 'Client Name') {
+    if (firstName.value || lastName.value) {
+      activeQuery.value = { searchBy: 'name', firstName: firstName.value, lastName: lastName.value }
+      execute()
     }
-  },
-  mounted() {
-    // when component is mounted, load the data -
-    this.loadData()
-  },
-  methods: {
-    // method called when component is mounted
-    async loadData() {
-      // Resets all the variables
-      this.searchBy = ''
-      this.firstName = ''
-      this.lastName = ''
-      this.phoneNumber = ''
+    // if user searches by client phone number
+  } else if (searchBy.value === 'Client Number') {
+    if (phoneNumber.value) {
+      activeQuery.value = { searchBy: 'number', phoneNumber: phoneNumber.value }
+      execute()
+    }
+  }
+}
 
-      // get list of clients
-      try {
-        const response = await getClients();
-        this.clients = response;
-      } catch (error) {
-        toast.error(error)
-      }
-    },
-    // method called when user searches for clients
-    async handleSubmitForm() {
-      // if user searched by client name
-      if (this.searchBy === 'Client Name') {
-        if (this.firstName || this.lastName) {
-          try {
-            const query = {
-              searchBy: 'name',
-              firstName: this.firstName,
-              lastName: this.lastName,
-            }
-            const response = await searchClients(query)
-            this.clients = response;
-          } catch (error) {
-            toast.error(error)
-          }
-        }
-        // if user searches by client phone number
-      } else if (this.searchBy === 'Client Number') {
-        if (this.phoneNumber) {
-          try {
-            const query = {
-              searchBy: 'number',
-              phoneNumber: this.phoneNumber
-            }
-            const response = await searchClients(query)
-            this.clients = response;
-          } catch (error) {
-            toast.error(error)
-          }
-        }
-      }
-    },
-  },
+function openClient(client) {
+  router.push({ name: 'clientdetails', params: { id: client._id } })
 }
 </script>
