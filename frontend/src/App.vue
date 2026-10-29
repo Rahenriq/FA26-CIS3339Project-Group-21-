@@ -89,7 +89,11 @@
   </main>
 </template>
 
-<script>
+<script setup>
+// MIGRATION NOTE: <script> + export default { ... } -> <script setup>.
+// Everything declared at the top level is automatically available to the template,
+// so the old `setup() { return { user } }` wrapper is no longer needed.
+import { ref, onMounted } from 'vue'
 import { useLoggedInUserStore } from './store/loggedInUser'
 import { getOrgName } from './api/api'
 import { useToast } from 'vue-toastification'
@@ -97,34 +101,27 @@ import { useToast } from 'vue-toastification'
 //Notifications
 const toast = useToast()
 
-export default {
-  setup() {
-    const user = useLoggedInUserStore();
-    return { user };
-  },
-  data() {
-    return {
-      orgName: "Dataplatform",
-    };
-  },
-  async created() {
-    try {
-      this.orgName = await getOrgName();
-    } catch {
-      throw (error)
-    }
-  },
-  methods: {
-    logout() {
-      try {
-        this.$store.dispatch('clearSessionData');
-        this.$router.push('/')
-      } catch (error) {
-        toast.error('logout error', error)
-      }
-    },
+// Pinia store holding the logged in user (the template uses user.isLoggedIn, user.role and user.logout)
+const user = useLoggedInUserStore()
+
+// MIGRATION NOTE: data() { return { orgName } } -> ref()
+// (use orgName.value in script; the template still just uses {{ orgName }})
+const orgName = ref('Dataplatform')
+
+// MIGRATION NOTE: async created() -> onMounted()
+// loads the organization name from the API when the component is mounted
+onMounted(async () => {
+  try {
+    orgName.value = await getOrgName()
+  } catch (error) {
+    // F2 fix: the old `catch { throw (error) }` referenced an undefined variable.
+    // Keep the default name and tell the user instead of crashing.
+    toast.error(error.message || 'Could not load the organization name')
   }
-}
+})
+
+// MIGRATION NOTE: methods.logout was removed. It was never called (the template uses user.logout from the
+// Pinia store) and it used this.$store / this.$router, which do not exist in a Pinia + Composition API app.
 </script>
 
 <style scoped>
