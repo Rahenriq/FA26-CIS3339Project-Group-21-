@@ -91,55 +91,20 @@
         </p>
 
         <!-- Error state -->
-        <div v-else-if="errorMessage" class="p-4">
-          <p class="text-red-500">{{ errorMessage }}</p>
+        <div v-else-if="error" class="p-4">
+          <p class="text-red-500">{{ error }}</p>
           <button
             type="button"
             class="mt-2 bg-red-700 text-white rounded px-3 py-1"
-            @click="loadData"
+            @click="execute"
           >
             Retry
           </button>
         </div>
 
-        <table v-else class="min-w-full shadow-md rounded">
-          <thead class="bg-gray-50 text-xl">
-            <tr>
-              <th class="p-4 text-left" style="width: 25%;">
-                Service Name
-              </th>
-              <th class="p-4 text-left" style="width: 75%;">
-                Service Description
-              </th>
-            </tr>
-          </thead>
-
-          <tbody class="divide-y divide-gray-300">
-            <tr
-              v-for="service in services"
-              :key="service._id"
-              @click="openService(service._id)"
-              class="cursor-pointer"
-              :class="{ hoverRow: hoverId === service._id }"
-              @mouseenter="hoverId = service._id"
-              @mouseleave="hoverId = null"
-            >
-              <td class="p-4 text-left">
-                {{ service.name }}
-              </td>
-              <td class="p-4 text-left text-sm">
-                {{ service.description }}
-              </td>
-            </tr>
-
-            <!-- Empty state -->
-            <tr v-if="services.length === 0">
-              <td colspan="2" class="p-4 text-center text-gray-500">
-                No results
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <!-- MIGRATION NOTE: hand-written <table> replaced by the shared DataTable (F3);
+             it shows its own "No results" row when empty -->
+        <DataTable v-else :columns="columns" :rows="services || []" @row-click="openService" />
       </div>
     </div>
   </main>
@@ -149,59 +114,53 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getServices, searchServices } from '../api/api'
-import { useToast } from 'vue-toastification'
+import { useApi } from '../composables/useApi'
+import DataTable from '../components/DataTable.vue'
 
 // MIGRATION_NOTE: Converted findservice.vue from Options API
 // to Composition API using script setup.
 
-// MIGRATION_NOTE: Replaced data() with ref() for service
-// records, search fields, and hovered row state.
+// MIGRATION_NOTE: Replaced data() with ref() for the search fields.
+// (hoverId moved into DataTable)
 
-const services = ref([])
 const searchBy = ref('')
 const name = ref('')
 const description = ref('')
-const hoverId = ref(null)
-
-const loading = ref(false)
-const errorMessage = ref('')
+// the search currently applied (null = show every service)
+const activeQuery = ref(null)
 
 const router = useRouter()
-const toast = useToast()
+
+// MIGRATION_NOTE: the hand-written loading/errorMessage/try-catch is replaced by the useApi composable (F2).
+const { data: services, loading, error, execute } = useApi(() =>
+  activeQuery.value ? searchServices(activeQuery.value) : getServices()
+)
+
+// columns shown by DataTable
+const columns = [
+  { label: 'Service Name', field: 'name' },
+  { label: 'Service Description', field: 'description' }
+]
 
 // MIGRATION_NOTE: Replaced mounted() with onMounted().
 
-onMounted(() => {
-  loadData()
-})
+onMounted(execute)
 
 // MIGRATION_NOTE: Converted methods.loadData()
-// into a regular async function.
+// into a regular function. Resets the search and reloads all services.
 
-async function loadData() {
+function loadData() {
   searchBy.value = ''
   name.value = ''
   description.value = ''
-
-  loading.value = true
-  errorMessage.value = ''
-
-  try {
-    const response = await getServices()
-    services.value = response
-  } catch (error) {
-    services.value = []
-    errorMessage.value = error?.message || 'Unable to load services'
-    toast.error(errorMessage.value)
-  } finally {
-    loading.value = false
-  }
+  activeQuery.value = null
+  execute()
 }
 
 // MIGRATION_NOTE: Converted methods.handleSubmitForm()
-// into a regular async function.
+// into a regular function.
 
-async function handleSubmitForm() {
+function handleSubmitForm() {
   let query = null
 
   if (searchBy.value === 'Service Name' && name.value) {
@@ -223,28 +182,17 @@ async function handleSubmitForm() {
     return
   }
 
-  loading.value = true
-  errorMessage.value = ''
-
-  try {
-    const response = await searchServices(query)
-    services.value = response
-  } catch (error) {
-    services.value = []
-    errorMessage.value = error?.message || 'Unable to search services'
-    toast.error(errorMessage.value)
-  } finally {
-    loading.value = false
-  }
+  activeQuery.value = query
+  execute()
 }
 
 // MIGRATION_NOTE: Replaced this.$router.push()
 // with the Composition API useRouter().
 
-function openService(id) {
+function openService(service) {
   router.push({
     name: 'servicedetails',
-    params: { id }
+    params: { id: service._id }
   })
 }
 </script>

@@ -87,55 +87,25 @@
       <div class="flex flex-col col-span-2">
 
         <!-- Loading state -->
-        <p v-if="isLoading" class="p-4 text-gray-600">
+        <p v-if="loading" class="p-4 text-gray-600">
           Loading events...
         </p>
 
         <!-- Error state -->
-        <div v-else-if="errorMessage" class="p-4">
-          <p class="text-red-500">{{ errorMessage }}</p>
+        <div v-else-if="error" class="p-4">
+          <p class="text-red-500">{{ error }}</p>
           <button
             type="button"
             class="mt-2 bg-red-700 text-white rounded px-3 py-1"
-            @click="loadData"
+            @click="execute"
           >
             Retry
           </button>
         </div>
 
-        <!-- Events table -->
-        <table v-else class="min-w-full shadow-md rounded">
-          <thead class="bg-gray-50 text-xl">
-            <tr>
-              <th class="p-4 text-left">Event Name</th>
-              <th class="p-4 text-left">Event Date</th>
-              <th class="p-4 text-left">Event Address</th>
-            </tr>
-          </thead>
-
-          <tbody class="divide-y divide-gray-300">
-            <tr
-              v-for="event in events"
-              :key="event._id"
-              @click="openEvent(event._id)"
-              class="cursor-pointer"
-              :class="{ hoverRow: hoverId === event._id }"
-              @mouseenter="hoverId = event._id"
-              @mouseleave="hoverId = null"
-            >
-              <td class="p-2 text-left">{{ event.name }}</td>
-              <td class="p-2 text-left">{{ formatDate(event.date) }}</td>
-              <td class="p-2 text-left">{{ event.address?.line1 }}</td>
-            </tr>
-
-            <!-- Empty state -->
-            <tr v-if="events.length === 0">
-              <td colspan="3" class="p-4 text-center text-gray-500">
-                No events found
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <!-- MIGRATION NOTE: hand-written <table> replaced by the shared DataTable (F3);
+             it shows its own "No results" row when empty -->
+        <DataTable v-else :columns="columns" :rows="events || []" @row-click="openEvent" />
       </div>
     </div>
   </main>
@@ -145,60 +115,55 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getEvents, searchEvents } from '../api/api'
-import { useToast } from 'vue-toastification'
+import { useApi } from '../composables/useApi'
+import DataTable from '../components/DataTable.vue'
 
 // MIGRATION_NOTE: Converted findevents.vue from Options API
 // to Composition API using script setup.
 
-// MIGRATION_NOTE: Replaced data() with ref() for event
-// records, search fields, and hovered row state.
+// MIGRATION_NOTE: Replaced data() with ref() for the search fields.
+// (hoverId moved into DataTable)
 
-const events = ref([])
 const searchBy = ref(null)
 const name = ref(null)
 const eventDate = ref(null)
-const hoverId = ref(null)
-
-const isLoading = ref(false)
-const errorMessage = ref('')
+// the search currently applied (null = show every event)
+const activeQuery = ref(null)
 
 const router = useRouter()
-const toast = useToast()
+
+// MIGRATION_NOTE: the hand-written isLoading/errorMessage/try-catch is replaced by the useApi composable (F2).
+const { data: events, loading, error, execute } = useApi(() =>
+  activeQuery.value ? searchEvents(activeQuery.value) : getEvents()
+)
+
+// columns shown by DataTable
+const columns = [
+  { label: 'Event Name', field: 'name' },
+  { label: 'Event Date', field: 'date', render: (e) => formatDate(e.date) },
+  { label: 'Event Address', field: 'address.line1' }
+]
 
 // MIGRATION_NOTE: Replaced mounted() with onMounted()
 // to load events when the component opens.
 
-onMounted(() => {
-  loadData()
-})
+onMounted(execute)
 
 // MIGRATION_NOTE: Converted methods.loadData()
-// into a regular async function.
+// into a regular function. Resets the search and reloads all events.
 
-async function loadData() {
+function loadData() {
   searchBy.value = null
   name.value = null
   eventDate.value = null
-
-  isLoading.value = true
-  errorMessage.value = ''
-
-  try {
-    const response = await getEvents()
-    events.value = response
-  } catch (error) {
-    events.value = []
-    errorMessage.value = error?.message || 'Error loading events'
-    toast.error(errorMessage.value)
-  } finally {
-    isLoading.value = false
-  }
+  activeQuery.value = null
+  execute()
 }
 
 // MIGRATION_NOTE: Converted methods.handleSubmitForm()
-// into a regular async function.
+// into a regular function.
 
-async function handleSubmitForm() {
+function handleSubmitForm() {
   let query = null
 
   // Search by event name
@@ -221,19 +186,8 @@ async function handleSubmitForm() {
     return
   }
 
-  isLoading.value = true
-  errorMessage.value = ''
-
-  try {
-    const response = await searchEvents(query)
-    events.value = response
-  } catch (error) {
-    events.value = []
-    errorMessage.value = error?.message || 'Error searching events'
-    toast.error(errorMessage.value)
-  } finally {
-    isLoading.value = false
-  }
+  activeQuery.value = query
+  execute()
 }
 
 // MIGRATION_NOTE: Converted methods.formatDate()
@@ -258,10 +212,10 @@ function formatDate(date) {
 // MIGRATION_NOTE: Replaced this.$router.push()
 // with useRouter() for navigation to event details.
 
-function openEvent(id) {
+function openEvent(event) {
   router.push({
     name: 'eventdetails',
-    params: { id }
+    params: { id: event._id }
   })
 }
 </script>

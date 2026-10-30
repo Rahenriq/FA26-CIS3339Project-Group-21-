@@ -13,7 +13,7 @@
               Events Attendance
           </h1>
       
-          <div v-if="!recentEvents.length" class="flex justify-center mt-10">No events found.</div>
+          <div v-if="!loading && !error && !recentEvents.length" class="flex justify-center mt-10">No events found.</div>
           <table v-if="recentEvents.length" class="min-w-full shadow-md rounded">
             <thead class="bg-gray-50 text-xl">
               <tr class="p-4 text-left">
@@ -35,7 +35,8 @@
             </tbody>
           </table>
           
-          <div v-if="recentEvents.length">
+          <!-- F2: also shown while loading / on error, so those messages are visible -->
+          <div v-if="recentEvents.length || loading || error">
             <AttendanceChart
               v-if="!loading && !error"
               :label="labels"
@@ -72,7 +73,7 @@
               Clients by Zip Code
           </h1>
           
-          <div v-if="!zips.length" class="flex justify-center mt-10">No clients found.</div>
+          <div v-if="!zipLoading && !zipError && !zips.length" class="flex justify-center mt-10">No clients found.</div>
           <table v-if="zips.length" class="min-w-full shadow-md rounded">
             <thead class="bg-gray-50 text-xl">
               <tr class="p-4 text-left">
@@ -90,7 +91,7 @@
               </tr>
             </tbody>
           </table>
-          <div v-if="zips.length" class="flex justify-center mt-10">
+          <div v-if="zips.length || zipLoading || zipError" class="flex justify-center mt-10">
             <ZipChart
               v-if="!zipLoading && !zipError"
               :label="zipLabels"
@@ -126,6 +127,7 @@
 
 <script setup>
 import { computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 // MIGRATION NOTE: with <script setup> imported components are registered automatically,
 // so the old `components: { AttendanceChart, ZipChart }` option is gone.
 import AttendanceChart from '../components/barChart.vue'
@@ -163,6 +165,12 @@ function formatDate(date) {
   const month = String(isoDate.getUTCMonth() + 1).padStart(2, '0')
   const day = String(isoDate.getUTCDate()).padStart(2, '0')
   return `${month}/${day}/${year}`
+}
+
+// MIGRATION NOTE: methods.editEvent -> plain function; this.$router -> useRouter()
+const router = useRouter()
+function editEvent(eventID) {
+  router.push({ name: 'eventdetails', params: { id: eventID } })
 }
 
 // MIGRATION NOTE: mounted() -> onMounted()
