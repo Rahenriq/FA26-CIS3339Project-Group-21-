@@ -55,10 +55,10 @@
             <!-- Start of error alert -->
             <div class="mt-12 bg-red-50" v-if="error">
               <h3 class="px-4 py-1 text-4xl font-bold text-white bg-red-800">
-                {{ error.title }}
+                Error
               </h3>
               <p class="p-4 text-lg font-bold text-red-900">
-                {{ error.message }}
+                {{ error }}
               </p>
             </div>
             <!-- End of error alert -->
@@ -110,10 +110,10 @@
             <!-- Start of error alert -->
             <div class="mt-12 bg-red-50" v-if="zipError">
               <h3 class="px-4 py-1 text-4xl font-bold text-white bg-red-800">
-                {{ zipError.title }}
+                Error
               </h3>
               <p class="p-4 text-lg font-bold text-red-900">
-                {{ zipError.message }}
+                {{ zipError }}
               </p>
             </div>
             <!-- End of error alert -->
@@ -124,109 +124,50 @@
   </main>
 </template>
 
-<script>
+<script setup>
+import { computed, onMounted } from 'vue'
+// MIGRATION NOTE: with <script setup> imported components are registered automatically,
+// so the old `components: { AttendanceChart, ZipChart }` option is gone.
 import AttendanceChart from '../components/barChart.vue'
 import ZipChart from '../components/donutZipChart.vue'
 import { getAttendance, getClientsByZipCode } from '../api/api'
+import { useApi } from '../composables/useApi'
 
-export default {
-  components: {
-    AttendanceChart,
-    ZipChart,
-  },
-  data() {
-    return {
-      recentEvents: [],
-      zips: [],
-      labels: [],
-      chartData: [],
-      zipLabels: [],
-      zipChartData: [],
-      loading: false,
-      error: null,
-      zipLoading: false,
-      zipError: null
-    }
-  },
-  mounted() {
-    this.getAttendanceData()
-    this.getZipData()
-  },
-  methods: {
-    async getAttendanceData() {
-      try {
-        this.error = null
-        this.loading = true
-        
-        const attendance = await getAttendance();
-        this.recentEvents = attendance;
-        this.labels = attendance.map(
-          (item) => `${item.name} (${this.formatDate(item.date)})`
-        )
-        this.chartData = attendance.map((item) => item.attendees.length)
-      } catch (err) {
-        if (err.response) {
-          // client received an error response (5xx, 4xx)
-          this.error = {
-            title: 'Server Response',
-            message: err.message
-          }
-        } else if (err.request) {
-          // client never received a response, or request never left
-          this.error = {
-            title: 'Unable to Reach Server',
-            message: err.message
-          }
-        } else {
-          // There's probably an error in your code
-          this.error = {
-            title: 'Application Error',
-            message: err.message
-          }
-        }
-      }
-      this.loading = false
-    },
-    async getZipData() {
-      try {
-        this.zipError = null
-        this.zipLoading = true
-        
-        const zipdata = await getClientsByZipCode();
-        this.zips = zipdata;
-        this.zipLabels = zipdata.map((item) => item._id)
-        this.zipChartData = zipdata.map((item) => item.count)
-      } catch (err) {
-        if (err.response) {
-          // client received an error response (5xx, 4xx)
-          this.zipError = {
-            title: 'Server Response',
-            message: err.message
-          }
-        } else if (err.request) {
-          // client never received a response, or request never left
-          this.zipError = {
-            title: 'Unable to Reach Server',
-            message: err.message
-          }
-        } else {
-          // There's probably an error in your code
-          this.zipError = {
-            title: 'Application Error',
-            message: err.message
-          }
-        }
-      }
-      this.zipLoading = false
-    },
-    // method called to format the event date
-    formatDate(date) {
-      const isoDate = new Date(date);
-      const year = isoDate.getUTCFullYear();
-      const month = String(isoDate.getUTCMonth() + 1).padStart(2, '0');
-      const day = String(isoDate.getUTCDate()).padStart(2, '0');
-      return `${month}/${day}/${year}`;
-    },
-  }
+// MIGRATION NOTE: the hand-written loading/error state (and the err.response / err.request branching)
+// is replaced by the useApi composable (F2).
+const {
+  data: attendance,
+  loading,
+  error,
+  execute: getAttendanceData
+} = useApi(() => getAttendance())
+const {
+  data: zipData,
+  loading: zipLoading,
+  error: zipError,
+  execute: getZipData
+} = useApi(() => getClientsByZipCode())
+
+// MIGRATION NOTE: data() fields that were derived from API responses -> computed()
+const recentEvents = computed(() => attendance.value || [])
+const labels = computed(() => recentEvents.value.map((item) => `${item.name} (${formatDate(item.date)})`))
+const chartData = computed(() => recentEvents.value.map((item) => item.attendees.length))
+const zips = computed(() => zipData.value || [])
+const zipLabels = computed(() => zips.value.map((item) => item._id))
+const zipChartData = computed(() => zips.value.map((item) => item.count))
+
+// method called to format the event date
+function formatDate(date) {
+  const isoDate = new Date(date)
+  const year = isoDate.getUTCFullYear()
+  const month = String(isoDate.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(isoDate.getUTCDate()).padStart(2, '0')
+  return `${month}/${day}/${year}`
 }
+
+// MIGRATION NOTE: mounted() -> onMounted()
+onMounted(() => {
+  getAttendanceData()
+  getZipData()
+})
 </script>
