@@ -28,7 +28,7 @@ VITE_ROOT_API is the URL for the backend API, either on localhost or in the clou
 
 The frontend uses the `VITE_ROOT_API` environment variable to connect to the backend API.
 
-Create a `.env` file inside the frontend folder:
+A `.env` file is included in the frontend folder:
 
 ```env
 VITE_ROOT_API=http://localhost:3000
@@ -66,6 +66,11 @@ Backend-connected workflows still need to be tested with the backend and databas
 The application uses Vue Router with HTML5 history mode. Static hosting services must be configured to serve `index.html` when a frontend route does not match a physical file.
 
 This allows users to refresh nested routes such as `/clientdetails/:id` without receiving a 404 error.
+
+- `public/_redirects` (`/* /index.html 200`) is copied into `dist/` by the build and handles this on Netlify / Cloudflare Pages.
+- Vercel: add a rewrite from `/(.*)` to `/index.html`.
+- nginx: `try_files $uri /index.html;`
+- `npm run serve` (vite preview) already does this fallback locally.
 
 ### Deployment Notes
 

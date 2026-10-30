@@ -123,7 +123,8 @@ async function handleSubmitForm() {
         toast.success(response)
         await router.push('/findservice')
     } catch (error) {
-        toast.error('Error creating new service')
+        // the axios interceptor already produced a readable message
+        toast.error(error.message)
     }
 }
 </script>
